@@ -96,6 +96,11 @@ export default defineConfig(({ mode }) => {
               return 'vendor-i18n'
             }
 
+            // 支付 SDK：单独分离，避免首页同步加载触发 script 注入副作用
+            if (id.includes('/@stripe/') || id.includes('/@airwallex/')) {
+              return 'vendor-payment'
+            }
+
             // 其他小型第三方库合并
             return 'vendor-misc'
           }
