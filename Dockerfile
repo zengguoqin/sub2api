@@ -34,7 +34,7 @@ RUN pnpm install --frozen-lockfile
 # Copy only that subtree to keep the build dependency minimal.
 COPY frontend/ ./
 COPY docs/legal/ /app/docs/legal/
-RUN pnpm run build
+RUN NODE_OPTIONS='--max-old-space-size=1400' pnpm exec vite build
 
 # -----------------------------------------------------------------------------
 # Stage 2: Backend Builder
