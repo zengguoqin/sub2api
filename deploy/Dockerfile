@@ -28,8 +28,7 @@ COPY frontend/package.json frontend/pnpm-lock.yaml frontend/.npmrc frontend/pnpm
 # to skip the approval check, then manually run the two scripts that are needed:
 # esbuild (downloads the native binary) and vue-demi (sets Vue 2/3 compat exports).
 RUN pnpm install --frozen-lockfile --ignore-scripts && \
-    node node_modules/esbuild/install.js && \
-    node node_modules/vue-demi/scripts/postinstall.js
+    pnpm rebuild esbuild vue-demi
 
 # Copy frontend source and build.
 # LegalDocumentView.vue (admin-compliance gate) build-time imports
