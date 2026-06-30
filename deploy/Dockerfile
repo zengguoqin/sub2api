@@ -24,7 +24,12 @@ RUN corepack enable && corepack prepare pnpm@latest --activate
 
 # Install dependencies first (better caching)
 COPY frontend/package.json frontend/pnpm-lock.yaml frontend/.npmrc frontend/pnpm.config.json frontend/pnpm-workspace.yaml ./
-RUN pnpm install --frozen-lockfile
+# pnpm 10+ blocks install scripts unless explicitly approved. Use --ignore-scripts
+# to skip the approval check, then manually run the two scripts that are needed:
+# esbuild (downloads the native binary) and vue-demi (sets Vue 2/3 compat exports).
+RUN pnpm install --frozen-lockfile --ignore-scripts && \
+    node node_modules/esbuild/install.js && \
+    node node_modules/vue-demi/scripts/postinstall.js
 
 # Copy frontend source and build.
 # LegalDocumentView.vue (admin-compliance gate) build-time imports
