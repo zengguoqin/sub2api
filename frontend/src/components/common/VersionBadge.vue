@@ -417,8 +417,8 @@ const updateError = ref('')
 const updateSuccess = ref(false)
 const restartCountdown = ref(0)
 
-// Only show update check for release builds (binary/docker deployment)
-const isReleaseBuild = computed(() => buildType.value === 'release')
+// Show update button for release (binary) and docker builds
+const isReleaseBuild = computed(() => buildType.value === 'release' || buildType.value === 'docker')
 
 function toggleDropdown() {
   dropdownOpen.value = !dropdownOpen.value

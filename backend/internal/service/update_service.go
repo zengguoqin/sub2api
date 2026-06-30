@@ -19,6 +19,7 @@ import (
 	"time"
 
 	infraerrors "github.com/Wei-Shaw/sub2api/internal/pkg/errors"
+	"github.com/Wei-Shaw/sub2api/internal/pkg/sysutil"
 )
 
 var (
@@ -28,7 +29,7 @@ var (
 const (
 	updateCacheKey = "update_check_cache"
 	updateCacheTTL = 1200 // 20 minutes
-	githubRepo     = "Wei-Shaw/sub2api"
+	githubRepo     = "zengguoqin/sub2api"
 
 	// Security: allowed download domains for updates
 	allowedDownloadHost = "github.com"
@@ -53,20 +54,26 @@ type GitHubReleaseClient interface {
 
 // UpdateService handles software updates
 type UpdateService struct {
-	cache          UpdateCache
-	githubClient   GitHubReleaseClient
-	currentVersion string
-	buildType      string // "source" for manual builds, "release" for CI builds
+	cache             UpdateCache
+	githubClient      GitHubReleaseClient
+	currentVersion    string
+	buildType         string // "source" | "release" | "docker"
+	dockerUpdater     *DockerUpdater
+	pulledDockerImage string // set by PerformUpdate in docker mode; used by Restart
 }
 
 // NewUpdateService creates a new UpdateService
 func NewUpdateService(cache UpdateCache, githubClient GitHubReleaseClient, version, buildType string) *UpdateService {
-	return &UpdateService{
+	svc := &UpdateService{
 		cache:          cache,
 		githubClient:   githubClient,
 		currentVersion: version,
 		buildType:      buildType,
 	}
+	if buildType == "docker" {
+		svc.dockerUpdater = NewDockerUpdater()
+	}
+	return svc
 }
 
 // UpdateInfo contains update information
@@ -143,9 +150,14 @@ func (s *UpdateService) CheckUpdate(ctx context.Context, force bool) (*UpdateInf
 	return info, nil
 }
 
-// PerformUpdate downloads and applies the update
-// Uses atomic file replacement pattern for safe in-place updates
+// PerformUpdate downloads and applies the update.
+// In docker mode: pulls the new image via Docker socket.
+// In release mode: uses atomic binary replacement.
 func (s *UpdateService) PerformUpdate(ctx context.Context) error {
+	if s.buildType == "docker" {
+		return s.performDockerUpdate(ctx)
+	}
+
 	info, err := s.CheckUpdate(ctx, true)
 	if err != nil {
 		return err
@@ -253,6 +265,44 @@ func (s *UpdateService) PerformUpdate(ctx context.Context) error {
 	// Success - backup file is kept for rollback capability
 	// It will be cleaned up on next successful update
 	return nil
+}
+
+// performDockerUpdate pulls the new Docker image for the latest release.
+func (s *UpdateService) performDockerUpdate(ctx context.Context) error {
+	if s.dockerUpdater == nil || !s.dockerUpdater.IsAvailable() {
+		return fmt.Errorf("Docker update unavailable: mount /var/run/docker.sock and set SELF_CONTAINER_NAME")
+	}
+	info, err := s.CheckUpdate(ctx, true)
+	if err != nil {
+		return err
+	}
+	if !info.HasUpdate {
+		return ErrNoUpdateAvailable
+	}
+	image := s.dockerUpdater.GetImageForVersion(info.LatestVersion)
+	if err := s.dockerUpdater.PullImage(ctx, image); err != nil {
+		return fmt.Errorf("pull %s: %w", image, err)
+	}
+	s.pulledDockerImage = image
+	return nil
+}
+
+// Restart restarts the service.
+// In docker mode: recreates the container with the pulled image via Docker socket.
+// In other modes: exits the process and relies on systemd to restart.
+func (s *UpdateService) Restart() error {
+	if s.buildType == "docker" {
+		if s.dockerUpdater == nil || !s.dockerUpdater.IsAvailable() {
+			return fmt.Errorf("Docker restart unavailable: mount /var/run/docker.sock and set SELF_CONTAINER_NAME")
+		}
+		image := s.pulledDockerImage
+		if image == "" {
+			image = s.dockerUpdater.GetImage()
+		}
+		s.dockerUpdater.ScheduleRecreate(image)
+		return nil
+	}
+	return sysutil.RestartService()
 }
 
 // Rollback restores the previous version

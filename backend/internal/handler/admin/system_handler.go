@@ -9,7 +9,6 @@ import (
 	"time"
 
 	"github.com/Wei-Shaw/sub2api/internal/pkg/response"
-	"github.com/Wei-Shaw/sub2api/internal/pkg/sysutil"
 	middleware2 "github.com/Wei-Shaw/sub2api/internal/server/middleware"
 	"github.com/Wei-Shaw/sub2api/internal/service"
 
@@ -26,6 +25,7 @@ type systemUpdateService interface {
 	CheckUpdate(ctx context.Context, force bool) (*service.UpdateInfo, error)
 	PerformUpdate(ctx context.Context) error
 	Rollback() error
+	Restart() error
 }
 
 // NewSystemHandler creates a new SystemHandler
@@ -147,12 +147,10 @@ func (h *SystemHandler) RestartService(c *gin.Context) {
 			release("", succeeded)
 		}()
 
-		// Schedule service restart in background after sending response
-		// This ensures the client receives the success response before the service restarts
+		// Schedule restart in background so the client receives the response first.
 		go func() {
-			// Wait a moment to ensure the response is sent
 			time.Sleep(500 * time.Millisecond)
-			sysutil.RestartServiceAsync()
+			_ = h.updateSvc.Restart()
 		}()
 		succeeded = true
 		return gin.H{

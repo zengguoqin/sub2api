@@ -38,6 +38,10 @@ func (s *systemHandlerUpdateServiceStub) Rollback() error {
 	return nil
 }
 
+func (s *systemHandlerUpdateServiceStub) Restart() error {
+	return nil
+}
+
 type systemUpdateResponseEnvelope struct {
 	Code    int    `json:"code"`
 	Message string `json:"message"`
