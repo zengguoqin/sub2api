@@ -18,6 +18,7 @@ import (
 type githubReleaseClient struct {
 	httpClient         *http.Client
 	downloadHTTPClient *http.Client
+	githubToken        string // GITHUB_TOKEN env var; required for private repos
 }
 
 type githubReleaseClientError struct {
@@ -60,6 +61,7 @@ func NewGitHubReleaseClient(proxyURL string, allowDirectOnProxyError bool) servi
 	return &githubReleaseClient{
 		httpClient:         sharedClient,
 		downloadHTTPClient: downloadClient,
+		githubToken:        os.Getenv("GITHUB_TOKEN"),
 	}
 }
 
@@ -84,6 +86,9 @@ func (c *githubReleaseClient) FetchLatestRelease(ctx context.Context, repo strin
 	}
 	req.Header.Set("Accept", "application/vnd.github.v3+json")
 	req.Header.Set("User-Agent", "Sub2API-Updater")
+	if c.githubToken != "" {
+		req.Header.Set("Authorization", "Bearer "+c.githubToken)
+	}
 
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
